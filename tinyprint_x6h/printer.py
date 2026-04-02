@@ -53,14 +53,14 @@ async def disconnect(client: BleakClient):
     logger.info("Disconnecting from %s", client.address)
     await client.disconnect()
 
-async def print(client: BleakClient, data: bytes):
+async def print(client: BleakClient, data: bytes, quality: int = 4, speed: int = 25):
     if not client.is_connected:
         logger.error("Printer is not connected")
         raise RuntimeError("Printer is not connected")
 
     logger.info("Starting print job")
 
-    commands = create_print_commands(data)
+    commands = create_print_commands(data, quality=quality, speed=speed)
     logger.debug("Hex data: %s", commands.hex(" "))
 
     for i in range(0, len(commands), PACKET_SIZE):
