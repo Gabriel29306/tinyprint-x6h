@@ -43,17 +43,19 @@ def create_print_lines_command(data: bytes) -> bytes:
     # Pack length of original and compressed data, and compressed data into payload
     payload = struct.pack('<HH', len(data), len(compressed)) + compressed
 
-    return create_command(0xCE, payload)
+    return create_command(0xCF, payload)
 
 def create_print_lines_commands(data: bytes, line_len: int, block_lines: int) -> bytes:
-    total_len = len(data)
-    block_len = line_len * block_lines
+    # Add a white padding line to prevent dark-line artifacts at the start of the print
+    prepared = bytes([0xFF] * line_len) + data
+    
+    # Calculer la longueur sur les données préparées pour ne pas oublier la dernière ligne
+    total_len = len(prepared)
+    block_len: int = line_len * block_lines
 
     if total_len % line_len != 0:
         raise ValueError(f"Printing data length must be a multiple of line len ({line_len})")
 
-    # Add a white padding line to prevent dark-line artifacts at the start of the print
-    prepared = bytes([0xFF] * line_len) + data
     commands = bytearray()
 
     for block_start in range(0, total_len, block_len):
@@ -61,17 +63,22 @@ def create_print_lines_commands(data: bytes, line_len: int, block_lines: int) ->
         block = prepared[block_start:block_end]
         packed = bytearray()
 
-        # Bit-pack 8 pixels per byte: a dark pixel (value < 128) sets its bit to 1 (print)
-        for i in range(0, len(block), 8):
-            byte_val = 0
-            for bit in range(8):
-                if i + bit < len(block) and block[i + bit] < DARK_PIXEL_THRESHOLD:
-                    byte_val |= (1 << (7 - bit))
-            packed.append(byte_val)
+        # Pack two pixels into one byte
+        for i in range(0, len(block), 2):
+            p0 = block[i]
+            # Utiliser 255 (blanc) par défaut au lieu de 0 (noir)
+            p1 = block[i + 1] if i + 1 < len(block) else 255
+            
+            # 1. Inversion de chaleur : Blanc (255) -> 0, Noir (0) -> 15
+            heat0 = 15 - (p0 >> 4)
+            heat1 = 15 - (p1 >> 4)
+            
+            # 2. Nibble Swap : p1 prend les 4 bits de gauche, p0 les 4 bits de droite
+            packed.append((heat1 << 4) | heat0)
 
         commands += create_print_lines_command(bytes(packed))
 
-    return commands
+    return bytes(commands)
 
 def create_print_commands(data: bytes, quality: int = 4, speed: int = 25) -> bytes:
     """Assemble the full command sequence to send to the printer.
