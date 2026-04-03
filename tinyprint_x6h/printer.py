@@ -1,7 +1,7 @@
 import asyncio
-from bleak import BleakClient, BleakError, BleakScanner
+from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakError
 import logging
-import math
 
 from .protocol import create_print_commands
 
